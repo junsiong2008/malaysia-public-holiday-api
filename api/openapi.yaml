@@ -1,0 +1,674 @@
+openapi: 3.0.0
+info:
+  title: Malaysian Public Holidays API
+  description: API for retrieving Malaysian national and state-specific public holidays with proper handling of weekend configurations, replacement holidays, and ad-hoc declarations
+  version: 1.0.0
+
+servers:
+  - url: https://api.malaysia-holidays.gov.my/v1
+    description: Production server
+
+paths:
+  /holidays:
+    get:
+      summary: Get all public holidays
+      description: Retrieve public holidays with optional filtering by year, state, and type
+      parameters:
+        - name: year
+          in: query
+          description: Year for holidays (e.g., 2024)
+          required: false
+          schema:
+            type: integer
+            minimum: 2000
+            maximum: 2100
+        - name: state
+          in: query
+          description: State code (e.g., JHR, KUL, SEL)
+          required: false
+          schema:
+            type: string
+            enum: [JHR, KDH, KTN, KUL, LBN, MLK, NSN, PHG, PNG, PRK, PLS, SBH, SGR, SWK, TRG, WP]
+        - name: type
+          in: query
+          description: Holiday type filter
+          required: false
+          schema:
+            type: string
+            enum: [national, state, optional, replacement, adhoc]
+        - name: month
+          in: query
+          description: Filter by month (1-12)
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+        - name: include_replacements
+          in: query
+          description: Include replacement holidays in results (default true)
+          required: false
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Holiday'
+                  meta:
+                    $ref: '#/components/schemas/Meta'
+              example:
+                success: true
+                data:
+                  - id: "mys-2024-001"
+                    name: "Hari Tahun Baru"
+                    name_en: "New Year's Day"
+                    date: "2024-01-01"
+                    day_of_week: "Monday"
+                    type: "national"
+                    states: ["ALL"]
+                    is_replacement_holiday: false
+                    original_date: null
+                    replaced_by: null
+                    replacement_reason: null
+                  - id: "mys-2024-025"
+                    name: "Hari Keputeraan Sultan Johor (Cuti Gantian)"
+                    name_en: "Birthday of the Sultan of Johor (Replacement)"
+                    date: "2024-03-25"
+                    day_of_week: "Monday"
+                    type: "replacement"
+                    states: ["JHR"]
+                    is_replacement_holiday: true
+                    original_date: "2024-03-23"
+                    original_holiday_id: "mys-2024-024"
+                    replaced_by: null
+                    replacement_reason: "Original date falls on Saturday (weekend)"
+                  - id: "mys-2024-088"
+                    name: "Cuti Peristiwa - Kemenangan Piala Thomas"
+                    name_en: "Special Holiday - Thomas Cup Victory"
+                    date: "2024-05-20"
+                    day_of_week: "Monday"
+                    type: "adhoc"
+                    states: ["ALL"]
+                    is_replacement_holiday: false
+                    original_date: null
+                    replaced_by: null
+                    replacement_reason: null
+                    gazette_reference: "PU(B) 234/2024"
+                    declared_date: "2024-05-15"
+                    description: "Declared to celebrate Thomas Cup victory"
+                meta:
+                  total_count: 3
+                  year: 2024
+                  last_updated: "2024-05-15T14:30:00Z"
+                  generated_at: "2024-05-20T08:00:00Z"
+                  data_version: "2024.1.5"
+
+  /holidays/{id}:
+    get:
+      summary: Get specific holiday details
+      description: Retrieve detailed information about a specific holiday
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Unique holiday identifier
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/Holiday'
+        '404':
+          description: Holiday not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /holidays/upcoming:
+    get:
+      summary: Get upcoming holidays
+      description: Retrieve upcoming public holidays from current date
+      parameters:
+        - name: state
+          in: query
+          description: State code filter
+          required: false
+          schema:
+            type: string
+        - name: limit
+          in: query
+          description: Number of holidays to return
+          required: false
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 50
+        - name: include_replacements
+          in: query
+          description: Include replacement holidays
+          required: false
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Holiday'
+
+  /states:
+    get:
+      summary: Get all Malaysian states
+      description: Retrieve list of all states with their codes, names, and weekend configurations
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/State'
+              example:
+                success: true
+                data:
+                  - code: "JHR"
+                    name: "Johor"
+                    name_ms: "Johor"
+                    weekend_days: ["Saturday", "Sunday"]
+                    weekend_pattern: "sat-sun"
+                    saturday_replacement_rule: "no_replacement"
+                  - code: "KDH"
+                    name: "Kedah"
+                    name_ms: "Kedah"
+                    weekend_days: ["Friday", "Saturday"]
+                    weekend_pattern: "fri-sat"
+                    saturday_replacement_rule: "no_replacement"
+                  - code: "KTN"
+                    name: "Kelantan"
+                    name_ms: "Kelantan"
+                    weekend_days: ["Friday", "Saturday"]
+                    weekend_pattern: "fri-sat"
+                    saturday_replacement_rule: "replace_on_sunday"
+                  - code: "TRG"
+                    name: "Terengganu"
+                    name_ms: "Terengganu"
+                    weekend_days: ["Friday", "Saturday"]
+                    weekend_pattern: "fri-sat"
+                    saturday_replacement_rule: "replace_on_sunday"
+
+  /states/{state_code}/holidays:
+    get:
+      summary: Get holidays for specific state
+      description: Retrieve all holidays applicable to a specific state including replacement holidays based on state weekend configuration
+      parameters:
+        - name: state_code
+          in: path
+          required: true
+          description: State code
+          schema:
+            type: string
+        - name: year
+          in: query
+          description: Year filter
+          required: false
+          schema:
+            type: integer
+        - name: include_replacements
+          in: query
+          description: Include replacement holidays
+          required: false
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Holiday'
+                  meta:
+                    type: object
+                    properties:
+                      state_code:
+                        type: string
+                      state_name:
+                        type: string
+                      weekend_pattern:
+                        type: string
+                      total_count:
+                        type: integer
+                      last_updated:
+                        type: string
+                        format: date-time
+
+  /states/{state_code}/weekend:
+    get:
+      summary: Get weekend configuration for a state
+      description: Retrieve the weekend days for a specific state
+      parameters:
+        - name: state_code
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      state_code:
+                        type: string
+                      state_name:
+                        type: string
+                      weekend_days:
+                        type: array
+                        items:
+                          type: string
+                      weekend_pattern:
+                        type: string
+                        enum: ["fri-sat", "sat-sun"]
+              example:
+                success: true
+                data:
+                  state_code: "KTN"
+                  state_name: "Kelantan"
+                  weekend_days: ["Friday", "Saturday"]
+                  weekend_pattern: "fri-sat"
+
+  /holidays/check:
+    get:
+      summary: Check if a specific date is a holiday
+      description: Check if a given date is a public holiday for a specific state, considering weekend configuration
+      parameters:
+        - name: date
+          in: query
+          required: true
+          description: Date to check (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: state
+          in: query
+          required: false
+          description: State code to check against
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      is_holiday:
+                        type: boolean
+                      is_weekend:
+                        type: boolean
+                      date:
+                        type: string
+                        format: date
+                      day_of_week:
+                        type: string
+                      holidays:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Holiday'
+                      weekend_info:
+                        type: object
+                        properties:
+                          weekend_pattern:
+                            type: string
+                          weekend_days:
+                            type: array
+                            items:
+                              type: string
+              example:
+                success: true
+                data:
+                  is_holiday: true
+                  is_weekend: false
+                  date: "2024-08-31"
+                  day_of_week: "Saturday"
+                  holidays:
+                    - id: "mys-2024-010"
+                      name: "Hari Kebangsaan"
+                      name_en: "National Day"
+                      date: "2024-08-31"
+                      type: "national"
+                      states: ["ALL"]
+                  weekend_info:
+                    weekend_pattern: "sat-sun"
+                    weekend_days: ["Saturday", "Sunday"]
+
+  /holidays/working-days:
+    get:
+      summary: Calculate working days between dates
+      description: Calculate the number of working days between two dates, excluding holidays and weekends for a specific state
+      parameters:
+        - name: start_date
+          in: query
+          required: true
+          description: Start date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: true
+          description: End date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: state
+          in: query
+          required: true
+          description: State code for weekend and holiday calculation
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      start_date:
+                        type: string
+                        format: date
+                      end_date:
+                        type: string
+                        format: date
+                      state_code:
+                        type: string
+                      total_days:
+                        type: integer
+                      working_days:
+                        type: integer
+                      weekend_days:
+                        type: integer
+                      holiday_days:
+                        type: integer
+                      holidays_in_range:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Holiday'
+
+  /metadata:
+    get:
+      summary: Get API metadata
+      description: Retrieve information about data freshness, last updates, and version
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      data_version:
+                        type: string
+                        description: Version of the holiday data
+                      last_updated:
+                        type: string
+                        format: date-time
+                        description: When the holiday data was last updated
+                      last_gazette_check:
+                        type: string
+                        format: date-time
+                        description: When we last checked for new gazette notifications
+                      adhoc_holidays_count:
+                        type: integer
+                        description: Number of ad-hoc holidays in current year
+                      coverage_years:
+                        type: array
+                        items:
+                          type: integer
+                        description: Years with available holiday data
+              example:
+                success: true
+                data:
+                  data_version: "2024.1.5"
+                  last_updated: "2024-05-15T14:30:00Z"
+                  last_gazette_check: "2024-05-20T09:00:00Z"
+                  adhoc_holidays_count: 2
+                  coverage_years: [2023, 2024, 2025]
+
+components:
+  schemas:
+    Holiday:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique identifier for the holiday
+        name:
+          type: string
+          description: Holiday name in Malay
+        name_en:
+          type: string
+          description: Holiday name in English
+        date:
+          type: string
+          format: date
+          description: Holiday date (YYYY-MM-DD)
+        day_of_week:
+          type: string
+          description: Day of week (Monday, Tuesday, etc.)
+        type:
+          type: string
+          enum: [national, state, optional, replacement, adhoc]
+          description: Type of holiday
+        states:
+          type: array
+          items:
+            type: string
+          description: States where this holiday is observed (["ALL"] for national)
+        is_replacement_holiday:
+          type: boolean
+          description: Whether this is a replacement holiday (Cuti Gantian)
+        original_date:
+          type: string
+          format: date
+          nullable: true
+          description: Original date if this is a replacement holiday
+        original_holiday_id:
+          type: string
+          nullable: true
+          description: ID of the original holiday being replaced
+        replaced_by:
+          type: string
+          nullable: true
+          description: ID of the replacement holiday (if original falls on weekend)
+        replacement_reason:
+          type: string
+          nullable: true
+          description: Explanation for replacement (e.g., "Original date falls on Friday (weekend in Kelantan)")
+        description:
+          type: string
+          nullable: true
+          description: Additional information about the holiday
+        religion:
+          type: string
+          nullable: true
+          enum: [islam, buddhism, hinduism, christianity, taoism, secular]
+          description: Associated religion if applicable
+        gazette_reference:
+          type: string
+          nullable: true
+          description: Official gazette reference number for ad-hoc holidays
+        declared_date:
+          type: string
+          format: date
+          nullable: true
+          description: Date when ad-hoc holiday was officially declared
+
+    State:
+      type: object
+      properties:
+        code:
+          type: string
+          description: State code (ISO 3166-2:MY)
+        name:
+          type: string
+          description: State name in English
+        name_ms:
+          type: string
+          description: State name in Malay
+        weekend_days:
+          type: array
+          items:
+            type: string
+          description: Days that constitute the weekend
+        weekend_pattern:
+          type: string
+          enum: ["fri-sat", "sat-sun"]
+          description: Weekend pattern identifier
+        saturday_replacement_rule:
+          type: string
+          enum: ["no_replacement", "replace_on_sunday"]
+          description: How Saturday holidays are handled (specific to Fri-Sat states)
+
+    Meta:
+      type: object
+      properties:
+        total_count:
+          type: integer
+          description: Total number of holidays returned
+        year:
+          type: integer
+          description: Year of holidays
+        last_updated:
+          type: string
+          format: date-time
+          description: When the holiday data was last updated
+        generated_at:
+          type: string
+          format: date-time
+          description: Timestamp when response was generated
+        data_version:
+          type: string
+          description: Version of the holiday data
+
+    Error:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+
+# State Codes and Weekend Configurations:
+# 
+# Friday-Saturday Weekend States:
+# KDH - Kedah
+# KTN - Kelantan
+# TRG - Terengganu
+# 
+# Saturday-Sunday Weekend States:
+# JHR - Johor
+# KUL - Kuala Lumpur (Federal Territory)
+# LBN - Labuan (Federal Territory)
+# MLK - Melaka
+# NSN - Negeri Sembilan
+# PHG - Pahang
+# PNG - Penang (Pulau Pinang)
+# PRK - Perak
+# PLS - Perlis
+# SBH - Sabah
+# SGR - Selangor
+# SWK - Sarawak
+# WP - Putrajaya (Federal Territory)
+#
+# Replacement Holiday Rules:
+# 1. For Sat-Sun weekend states (most states):
+#    - Holiday falls on Sunday → Replaced on Monday
+#    - Holiday falls on Saturday → No replacement (already a rest day)
+# 2. For Kelantan and Terengganu (Fri-Sat weekend):
+#    - Holiday falls on Friday → Replaced on Sunday
+#    - Holiday falls on Saturday → Replaced on Sunday
+# 3. For Kedah (Fri-Sat weekend):
+#    - Holiday falls on Friday → Replaced on Sunday
+#    - Holiday falls on Saturday → No replacement (treated as off day)
+# 4. State holidays follow same pattern based on state's weekend configuration
+# 5. If replacement date also falls on another holiday, next working day is used
+#
+# Ad-hoc Holiday Types (Cuti Peristiwa):
+# - Sports achievements (e.g., Olympic medals, Thomas Cup, SEA Games)
+# - Election days (State/Federal elections)
+# - Special occasions (e.g., ASEAN Summits, Royal events)
+# - Must include gazette_reference and declared_date for verification

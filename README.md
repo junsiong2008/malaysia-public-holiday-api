@@ -103,7 +103,7 @@ To populate the database with fresh data:
   - Query Params: `state` (e.g., `JHR`), `year` (e.g., `2026`), `month`.
 - **`GET /states`**: List all supported states and their configurations.
 
-*For full API specification, refer to `api/openapi.yaml`.*
+*For full API specification, refer to [`docs/api.md`](docs/api.md) or see `api/openapi.yaml` for the OpenAPI spec.*
 
 ## Source
 

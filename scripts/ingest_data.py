@@ -133,7 +133,7 @@ def main():
         
         # Read and execute schema.sql
         print("Executing schema.sql...")
-        with open('schema.sql', 'r') as f:
+        with open('database/schema.sql', 'r') as f:
             schema_content = f.read()
             # Remove all comments (start with -- until end of line) using regex to avoid colon issues in comments
             schema_clean = re.sub(r'--.*', '', schema_content)
@@ -152,7 +152,7 @@ def main():
             
         # Read and execute seed_states.sql
         print("Executing seed_states.sql...")
-        with open('seed_states.sql', 'r') as f:
+        with open('database/seed_states.sql', 'r') as f:
             seed_sql = f.read()
             statements = seed_sql.split(';')
             for stmt in statements:

@@ -195,187 +195,101 @@ def main():
     global_id_counter = 1
     YEAR = 2026
     
-    # Iterate through the DataFrame
-    # Note: The CSV structure has merged cells potentially. 
-    # pd.read_csv might handle forward-fill if told, but let's check the data.
-    # The provided view_file showed rows like:
-    # 20: "Hari Raya Puasa * \n \n Hari Raya Puasa (Hari Kedua) *"
-    # This means one row contains TWO holidays.
-    
     for index, row in df.iterrows():
-        # Column names based on the file view
-        raw_name = str(row['HARI KELEPASAN AM'])
-        raw_date = str(row['TARIKH'])
-        
-        # Split multiline cells
-        names = [x.strip() for x in raw_name.split('\n') if x.strip()]
-        dates = [x.strip() for x in raw_date.split('\n') if x.strip()]
-        
-        # Handle mismatch length (sometimes name has extra lines, or dates)
-        # Usually they align.
-        # In the file view: 
-        # Row 2: Name has 3 lines (Name1, empty, Name2), Date has 3 lines (Date1, empty, Date2).
-        # We should filter out empty/whitespace lines.
-        
-        # Zip them
-        # Safety check
-        if len(names) != len(dates):
-            print(f"Warning: Row {index} has mismatching names/dates count. {len(names)} vs {len(dates)}")
-            # Fallback strategy? Use the shorter length
-            pass
-            
-        for i in range(min(len(names), len(dates))):
-            h_name = names[i]
-            h_date_str = dates[i]
-            
-            # Remove trailing '*' often found in names
-            h_name_clean = h_name.replace('*', '').strip()
-            
-            # Parse Date
-            h_date = parse_date(h_date_str, YEAR)
-            if not h_date:
-                continue
-            
-            # Determine States
-            # Iterate through state columns
-            affected_states = []
-            is_national = True # Assume national until proven otherwise
-            
-            for csv_col, db_code in STATE_MAPPING.items():
-                val = str(row.get(csv_col, '')).strip()
-                if val == '√':
-                    affected_states.append(db_code)
-                else:
-                    is_national = False
-            
-            # If affected_states is empty, skip?
-            if not affected_states:
-                continue
-                
-            # If all states are present, it is effectively national.
-            # However, for the DB `holiday_states` table, we still explicitly link all states 
-            # OR we could optimize. Let's explicitly link all to allow per-state querying easily.
-            # But the 'type' field should be 'national' if it covers all.
-            h_type = 'national' if len(affected_states) == len(STATE_MAPPING) else 'state'
-            
-            # Translate Name
-            h_name_en = translate_text(h_name_clean)
-            
-            # Create Main Holiday ID
-            h_id = f"mys-{YEAR}-{global_id_counter:03d}"
-            global_id_counter += 1
-            
-            # Store Main Holiday
-            holidays_to_insert.append({
-                'id': h_id,
-                'name': h_name_clean,
-                'name_en': h_name_en,
-                'date': h_date,
-                'day_of_week': h_date.strftime('%A'),
-                'type': h_type,
-                'is_replacement_holiday': False,
-                'original_date': None,
-                'original_holiday_id': None,
-                'replaced_by': None, # To be filled if replacement generated
-                'replacement_reason': None
-            })
-            
-            # Link Main Holiday to States
-            for state_code in affected_states:
-                holiday_states_to_insert.append({
-                    'holiday_id': h_id,
-                    'state_code': state_code
-                })
-                
-                # CHECK FOR REPLACEMENT FOR THIS STATE
-                # Retrieve matching config
-                config = states_config.get(state_code)
-                if not config: 
-                    continue
-                    
-                repl_date, reason = get_replacement_date(h_date, config['weekend_days'], config['saturday_replacement_rule'])
-                
-                if repl_date:
-                    # We need to create a REPLACEMENT holiday record.
-                    # Does this replacement already exist? (e.g. National holiday replaced for EVERY state on the same Monday)
-                    # Implementation detail: 
-                    # If we create a separate replacement holiday for EACH state, we get duplicates (Monday is holiday for JHR, and also for KDH...).
-                    # Ideally, we should unify them. 
-                    # Key for unification: (date, name).
-                    
-                    # BUT: Can we have a replacement that is State A only, and another for State B only, on same day? Yes.
-                    # "Holiday A (Replacement)"
-                    
-                    # Strategy:
-                    # Create a unique key for the replacement: f"{h_id}-repl-{repl_date}"
-                    # Check if we already created this specific replacement for this specific parent holiday on this date.
-                    
-                    # Wait, if 10 states replace Sunday->Monday, we want ONE "Holiday A (Replacement)" entry in `holidays` linked to 10 states in `holiday_states`.
-                    
-                    # Logic:
-                    # Check if we've already generated a replacement for this `h_id` on `repl_date`.
-                    # If so, just add this state to that replacement's `holiday_states`.
-                    # If not, create new replacement holiday entry.
-                    
-                    repl_id_suffix = f"{h_id}-repl" # Simple suffix, or use formatted ID?
-                    # Let's search in currently building list? 
-                    # Easier: Use a dictionary to track replacements for the current loop iteration (current holiday)
-                    pass 
+        h_name = str(row['HARI KELEPASAN AM']).strip()
+        h_date_str = str(row['TARIKH']).strip()
+        jenis = str(row.get('JENIS', '')).strip()
 
-            # Refined Replacement Logic Loop
-            # We have `affected_states` for this holiday `h_id`.
-            # We group states by their calculated replacement date.
-            replacements_map = {} # { date: [state_codes] }
-            
-            for state_code in affected_states:
-                config = states_config[state_code]
-                r_date, r_reason = get_replacement_date(h_date, config['weekend_days'], config['saturday_replacement_rule'])
-                if r_date:
-                    if r_date not in replacements_map:
-                        replacements_map[r_date] = []
-                    replacements_map[r_date].append(state_code)
-            
-            # Now create replacement holidays
-            for r_date, r_states in replacements_map.items():
-                # Create one replacement holiday
-                r_id = f"mys-{YEAR}-{global_id_counter:03d}"
-                global_id_counter += 1
-                
-                r_name = f"{h_name_clean} (Cuti Gantian)"
-                r_name_en = f"{h_name_en} (Replacement)"
-                
-                holidays_to_insert.append({
-                    'id': r_id,
-                    'name': r_name,
-                    'name_en': r_name_en,
-                    'date': r_date,
-                    'day_of_week': r_date.strftime('%A'),
-                    'type': 'replacement',
-                    'is_replacement_holiday': True,
-                    'original_date': h_date,
-                    'original_holiday_id': h_id,
-                    'replaced_by': None,
-                    'replacement_reason': f"Replacement for {h_name_clean}"
+        # Remove trailing '*' often found in names
+        h_name_clean = h_name.replace('*', '').strip()
+
+        # Parse Date
+        h_date = parse_date(h_date_str, YEAR)
+        if not h_date:
+            continue
+
+        # Determine affected states from state columns
+        affected_states = []
+        for csv_col, db_code in STATE_MAPPING.items():
+            val = str(row.get(csv_col, '')).strip()
+            if val == '√':
+                affected_states.append(db_code)
+
+        if not affected_states:
+            continue
+
+        # Use JENIS column for holiday type
+        h_type = 'national' if jenis == 'PERSEKUTUAN' else 'state'
+
+        # Translate Name
+        h_name_en = translate_text(h_name_clean)
+
+        # Create Main Holiday ID
+        h_id = f"mys-{YEAR}-{global_id_counter:03d}"
+        global_id_counter += 1
+
+        # Store Main Holiday
+        holidays_to_insert.append({
+            'id': h_id,
+            'name': h_name_clean,
+            'name_en': h_name_en,
+            'date': h_date,
+            'day_of_week': h_date.strftime('%A'),
+            'type': h_type,
+            'is_replacement_holiday': False,
+            'original_date': None,
+            'original_holiday_id': None,
+            'replaced_by': None,
+            'replacement_reason': None
+        })
+
+        # Link Main Holiday to States
+        for state_code in affected_states:
+            holiday_states_to_insert.append({
+                'holiday_id': h_id,
+                'state_code': state_code
+            })
+
+        # Replacement Logic: group states by their calculated replacement date
+        replacements_map = {}  # { date: [state_codes] }
+
+        for state_code in affected_states:
+            config = states_config.get(state_code)
+            if not config:
+                continue
+            r_date, r_reason = get_replacement_date(h_date, config['weekend_days'], config['saturday_replacement_rule'])
+            if r_date:
+                if r_date not in replacements_map:
+                    replacements_map[r_date] = []
+                replacements_map[r_date].append(state_code)
+
+        # Create replacement holidays (one per unique replacement date)
+        for r_date, r_states in replacements_map.items():
+            r_id = f"mys-{YEAR}-{global_id_counter:03d}"
+            global_id_counter += 1
+
+            r_name = f"{h_name_clean} (Cuti Gantian)"
+            r_name_en = f"{h_name_en} (Replacement)"
+
+            holidays_to_insert.append({
+                'id': r_id,
+                'name': r_name,
+                'name_en': r_name_en,
+                'date': r_date,
+                'day_of_week': r_date.strftime('%A'),
+                'type': 'replacement',
+                'is_replacement_holiday': True,
+                'original_date': h_date,
+                'original_holiday_id': h_id,
+                'replaced_by': None,
+                'replacement_reason': f"Replacement for {h_name_clean}"
+            })
+
+            for rs in r_states:
+                holiday_states_to_insert.append({
+                    'holiday_id': r_id,
+                    'state_code': rs
                 })
-                
-                # Link replacement to its states
-                for rs in r_states:
-                    holiday_states_to_insert.append({
-                        'holiday_id': r_id,
-                        'state_code': rs
-                    })
-                    
-                # Update the original holiday to point to this replacement?
-                # Issue: A holiday might be replaced on Monday for State A, but Tuesday for State B (unlikely but possible logic).
-                # The schema allow singular `replaced_by`. 
-                # If multiple replacements exist (split states), this field is ambiguous.
-                # Decision: Leave `replaced_by` NULL if multiple replacements, or pick first.
-                # For `mys-2024-025` example, it seems 1:1.
-                # We will set it if it's the only replacement.
-                
-                # For now, let's skip setting `replaced_by` on the parent to avoid complexity, 
-                # or just set it to the first one generated.
-                pass
 
     # 4. Bulk Insert
     print(f"Inserting {len(holidays_to_insert)} holidays and {len(holiday_states_to_insert)} state mappings...")

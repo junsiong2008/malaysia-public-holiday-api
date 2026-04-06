@@ -105,6 +105,56 @@ To populate the database with fresh data:
 
 *For full API specification, refer to [`docs/api.md`](docs/api.md) or see `api/openapi.yaml` for the OpenAPI spec.*
 
+## Deployment
+
+### Deploy to Google Cloud Run
+
+The API is containerized and ready to deploy to Cloud Run. It requires a VPC connector to reach a private Cloud SQL or PostgreSQL instance.
+
+**Prerequisites**
+
+- [Google Cloud CLI](https://cloud.google.com/sdk/docs/install) installed and authenticated
+- A GCP project with Cloud Run and Artifact Registry APIs enabled
+- A VPC connector configured in the same region (for private database access)
+
+**Enable required APIs**
+
+```bash
+gcloud services enable run.googleapis.com artifactregistry.googleapis.com
+```
+
+**Deploy from source**
+
+Run the following from the `api/` directory:
+
+```bash
+cd api/
+
+gcloud run deploy malaysia-public-holiday-api \
+  --source . \
+  --region us-central1 \
+  --platform managed \
+  --allow-unauthenticated \
+  --set-env-vars "DATABASE_URL=postgresql://USER:PASSWORD@DB_PRIVATE_IP:5432/DB_NAME" \
+  --vpc-connector=YOUR_VPC_CONNECTOR \
+  --vpc-egress=private-ranges-only \
+  --port=8080 \
+  --project=YOUR_PROJECT_ID
+```
+
+Replace the following placeholders:
+
+| Placeholder | Description |
+|---|---|
+| `USER` | Database username |
+| `PASSWORD` | Database password |
+| `DB_PRIVATE_IP` | Private IP of your PostgreSQL instance |
+| `DB_NAME` | Database name |
+| `YOUR_VPC_CONNECTOR` | Name of your Serverless VPC Access connector |
+| `YOUR_PROJECT_ID` | Your GCP project ID |
+
+> **Note**: Avoid passing credentials directly via `--set-env-vars` in production. Use [Google Secret Manager](https://cloud.google.com/secret-manager) and reference secrets with `--set-secrets` instead.
+
 ## Source
 
 [Kabinet.gov.my - HKA 2026](https://www.kabinet.gov.my/storage/2025/08/HKA-2026.pdf)
